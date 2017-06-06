@@ -1,0 +1,49 @@
+#%RAML 0.8
+baseUri: http://127.0.0.1:8084/api
+title: Account Receivables API
+version: 3.0
+
+/remittance:
+  displayName: Remittance
+  post:
+    body: 
+      application/json:
+        example: |
+          { "customerId" : "129384", 
+          "invoice": "BM-23934",
+          "amount": 77812.34,
+          "paymentType": "ACH",
+          "paymentRef": "1209231127",
+          "dateIssued":"2017-05-30"}
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+              {"status" : "success"}
+      404:
+        body: 
+          application/json:
+            example: |
+              {"error": "There was no Invoice matching this remittance"}
+  get:
+    queryParameters: 
+      invoiceId:
+        type: string
+        required: true
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+              { "remittanceId" : "IL-10213",
+              "customerId" : "129384", 
+              "invoice": "BM-23934",
+              "amount": 77812.34,
+              "paymentType": "ACH",
+              "paymentRef": "1209231127",
+              "dateIssued":"2017-05-30"}
+        
+          
+        
+  

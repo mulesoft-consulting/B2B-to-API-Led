@@ -1,0 +1,25 @@
+#%RAML 0.8
+baseUri: http://127.0.0.1:8081/api
+title: Sales Orders API
+version: 2.0
+
+/salesorder:
+  displayName: Sales Order
+  get:
+    queryParameters: 
+      poNumber:
+        type: string
+        required: true
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+              {"orderNumber":"000001290",
+              "accountName":"Acme",
+              "amount":2093.23,
+              "status":"activated",
+              "poNumber":"2298-WAT-323",
+              "poDate":"2017/05/23"
+              }
+  

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:dynamicsax="http://www.mulesoft.org/schema/mule/dynamicsax" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/dynamicsax http://www.mulesoft.org/schema/mule/dynamicsax/current/mule-dynamicsax.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:request-config name="HTTP_Request_SalesOrder" protocol="HTTP" host="127.0.0.1" port="8081" basePath="/api" doc:name="HTTP Request Configuration">
+        <http:raml-api-configuration location="endpoints/salesorder-api.raml"/>
+    </http:request-config>
+    <http:request-config name="HTTP_Request_Payment" protocol="HTTP" host="127.0.0.1" port="8085" basePath="/api" doc:name="HTTP Request Configuration">
+        <http:raml-api-configuration location="endpoints/payment-api.raml"/>
+    </http:request-config>
+</mule>

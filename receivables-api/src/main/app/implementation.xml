@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+
+    <flow name="PostPaymentFlow">
+        <set-variable variableName="poNumber" value="#[json:paymentRef]" doc:name="Set PO Number"/>
+        <http:request config-ref="HTTP_Request_SalesOrder" path="/salesorder" method="GET" doc:name="Verify Sales Order Exists">
+            <http:request-builder>
+                <http:query-param paramName="poNumber" value="#[flowVars.poNumber]"/>
+            </http:request-builder>
+            <http:success-status-code-validator values="200..399,404"/>
+        </http:request>
+        <validation:is-true message="There was no Sales Order matching this PO Number: #[flowVars.poNumber]" exceptionClass="org.mule.module.apikit.exception.NotFoundException" expression="#[message.inboundProperties.'http.status' != '404']" doc:name="No 404"/>
+        <enricher   doc:name="Check Payment Received">
+            <set-payload value="{&quot;Received&quot;: true, &quot;PaymentId&quot;:&quot;23049089&quot;}" doc:name="Call Bank"/>
+            <enrich source="#[json:Received]" target="#[flowVars.paymentReceived]"/>
+            <enrich source="#[json:PaymentId]" target="#[flowVars.bankConfirmationId]"/>
+        </enricher>
+        <choice doc:name="Payment made?">
+            <when expression="#[flowVars.paymentReceived]">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	salesOrderNmber: payload.orderNumber,
+	bankConfirmationId: flowVars.bankConfirmationId,
+	poNumber: payload.poNumber,
+	customer: payload.accountName,
+	amount: payload.amount,
+	currency: "USD",
+	createdDate: payload.poDate
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <http:request config-ref="HTTP_Request_Payment" path="/payment" method="POST" doc:name="Register Payment in Ledger"/>
+                <set-payload value="{&quot;status&quot;:&quot;success&quot;}" mimeType="application/json" doc:name="Set Response"/>
+            </when>
+            <otherwise>
+                <scripting:component doc:name="Cannot Proceed">
+                    <scripting:script engine="Groovy"><![CDATA[throw new org.mule.module.apikit.exception.NotFoundException();]]></scripting:script>
+                </scripting:component>
+            </otherwise>
+        </choice>
+    </flow>
+</mule>
