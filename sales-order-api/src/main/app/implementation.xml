@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:sfdc="http://www.mulesoft.org/schema/mule/sfdc" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/sfdc http://www.mulesoft.org/schema/mule/sfdc/current/mule-sfdc.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+    <flow name="GetSalesOrder">
+        <http:listener config-ref="httpListenerConfig" path="/order" doc:name="HTTP"/>
+        <set-variable variableName="poNumber" value="#[message.inboundProperties.'http.query.params'.poNumber]" doc:name="Variable"/>
+        <logger message="SELECT ContractId ,OrderNumber, PoNumber, PoDate, TotalAmount, Account.Name, Status, Type, Description FROM Order where PONumber = '#[flowVars.poNumber]'" level="INFO" doc:name="Logger"/>
+        <sfdc:query config-ref="Salesforce__Basic_Authentication" query="SELECT ContractId ,OrderNumber, PoNumber, PoDate, TotalAmount, Account.Name, Status, Type, Description FROM Order where PONumber = '#[flowVars.poNumber]'" doc:name="Salesforce"/>
+        <validation:is-true message="There was no sales order matching this PO" exceptionClass="org.mule.module.apikit.exception.NotFoundException" expression="#[payload.hasNext()]" doc:name="Validation"/>
+        <set-payload value="#[payload.next()]" doc:name="Get first record"/>
+    </flow>
+</mule>
