@@ -1,0 +1,17 @@
+{
+    "inputMessageMetadata": {},
+    "outputMessageMetadata": {
+        "flowVariables": {
+            "proceedToBusinessAck": {
+                "connectorName": "#_custom_mule_metadata_type_#",
+                "typeId": "bProcessToBusinessAck"
+            },
+            "paymentInfo": {
+                "connectorName": "#_custom_mule_metadata_type_#",
+                "typeId": "paymentInfo"
+            }
+        }
+    },
+    "id": "7e2a2a8f-3906-4e23-a744-f60e8d8c72ff",
+    "version": "5.2.0.0"
+}

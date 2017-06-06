@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:x12-edi="http://www.mulesoft.org/schema/mule/x12-edi" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:as2="http://www.mulesoft.org/schema/mule/as2" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/as2 http://www.mulesoft.org/schema/mule/as2/current/mule-as2.xsd
+http://www.mulesoft.org/schema/mule/partner-manager http://www.mulesoft.org/schema/mule/partner-manager/current/mule-partner-manager.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/x12-edi http://www.mulesoft.org/schema/mule/x12-edi/current/mule-x12-edi.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+    <as2:config name="listen-for-partners-as2-config" httpEndpointRef="listen-for-partners-http-endpoint" doc:name="AS2"/>
+    <as2:partner-manager-config name="listen-for-partners-as2-pm-config" httpEndpointRef="listen-for-partners-http-endpoint" standard="X12" doc:name="AS2"/>
+    <http:endpoint exchange-pattern="request-response"   method="POST" name="listen-for-partners-http-endpoint" doc:name="HTTP" host="${as2.company.http.host}" port="${as2.company.http.port}" connector-ref="HTTP_HTTPS"/>
+    <as2:config name="send-supplier-as2-config" httpEndpointRef="send-supplier-http-endpoint" doc:name="AS2"/>
+    <as2:partner-manager-config name="send-supplier-as2-pm-config" httpEndpointRef="send-supplier-http-endpoint" standard="X12" doc:name="AS2"/>
+
+    <http:endpoint exchange-pattern="request-response"   method="POST" name="send-supplier-http-endpoint" doc:name="HTTP" host="${as2.partner.http.host}" port="${as2.partner.http.port}"/>
+    <x12-edi:config name="supplier-x12-edi" doc:name="X12 EDI" groupIdPartner="${x12.partner.id}" groupIdSelf="${x12.company.id}" interchangeIdPartner="${x12.partner.id}" interchangeIdQualifierPartner="${x12.partner.interchange.id}" interchangeIdQualifierSelf="${x12.company.interchange.id}" interchangeIdSelf="${x12.company.id}" useB2BProvider="true">
+        <x12-edi:schemas>
+            <x12-edi:schema>/x12/004010/820.esl</x12-edi:schema>
+        </x12-edi:schemas>
+    </x12-edi:config>
+    <http:request-config name="HTTP_Receivables_Request_Config" protocol="HTTP" host="127.0.0.1" port="8084" basePath="/api" doc:name="HTTP Request Configuration">
+        <http:raml-api-configuration location="endpoints/receivables.raml"/>
+    </http:request-config>
+    <flow name="receive-820-from-partner-flow">
+        <as2:receive config-ref="listen-for-partners-as2-pm-config" doc:name="Receive 820 from Partner"  />
+        <x12-edi:read config-ref="supplier-x12-edi" doc:name="Parse 820"/>
+        <dw:transform-message doc:name="Extract 997" metadata:id="7e2a2a8f-3906-4e23-a744-f60e8d8c72ff">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java 
+---
+{
+	TransactionSets: {
+		v004010: {
+			"997": payload.FunctionalAcksGenerated
+		}
+	}
+}]]></dw:set-payload>
+            <dw:set-variable variableName="paymentInfo"><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	poNumber: payload.TransactionSets.v004010."820"[0].Detail."010_ENT_Loop"[0]."150_RMR_Loop"[0]."150_RMR".RMR02,
+	amount: payload.TransactionSets.v004010."820"[0].Detail."010_ENT_Loop"[0]."150_RMR_Loop"[0]."150_RMR".RMR04
+}]]></dw:set-variable>
+            <dw:set-variable variableName="proceedToBusinessAck"><![CDATA[%dw 1.0
+%output application/java
+---
+true when payload.TransactionSets.v004010."997"[0].Errors.size() != 0 otherwise false]]></dw:set-variable>
+        </dw:transform-message>
+        <async doc:name="Async: send 997 back to partner">
+            <logger message="997 written is #[payload]" level="INFO" doc:name="Logger"/>
+            <x12-edi:write config-ref="supplier-x12-edi" doc:name="Write 997"/>
+            <as2:send config-ref="send-supplier-as2-pm-config" contentType="application/edi-x12" as2From="${as2.company.id}" as2To="${as2.partner.id}" doc:name="Send 997 to Partner"/>
+        </async>
+        <logger message="OK to proceed: #[flowVars.proceedToBusinessAck]" level="INFO" doc:name="Logger"/>
+        <validation:is-true expression="#[flowVars.proceedToBusinessAck]" doc:name="Continue with Business if 997 was ok"/>
+        <logger message="PaymentInfo is: #[flowVars.paymentInfo]" level="INFO" doc:name="Logger"/>
+        <dw:transform-message doc:name="Feed Amount and PO Ref">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	amount: flowVars.paymentInfo.amount as :number,
+	paymentRef: flowVars.paymentInfo.poNumber
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <http:request config-ref="HTTP_Receivables_Request_Config" path="/remittance" method="POST" doc:name="Call Remittance API"/>
+        <logger message="Done! with payload: #[payload]" level="INFO" doc:name="Logger"/>
+        <choice-exception-strategy doc:name="Choice Exception Strategy">
+            <catch-exception-strategy when="#[exception.causeMatches('org.mule.extension.validation.api.ValidationException')]" doc:name="Validation Failed">
+                <logger message="Send email" level="INFO" doc:name="Logger"/>
+            </catch-exception-strategy>
+            <catch-exception-strategy doc:name="Other Exceptions">
+                <logger message="Something went wrong... #[message]" level="INFO" doc:name="Logger"/>
+            </catch-exception-strategy>
+        </choice-exception-strategy>
+        <!--<set-payload value="#[ ['TransactionSets' : [ 'v004010' : [ '997' : payload.FunctionalAcksGenerated ] ] ] ]" doc:name="Extract Canonical 997"/>-->
+    </flow>
+</mule>
